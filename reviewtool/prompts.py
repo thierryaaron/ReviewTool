@@ -229,102 +229,25 @@ Reviewer findings:
 {findings}
 """
 
-MAP_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "title": {"type": "string"},
-        "field": {"type": "string"},
-        "summary": {"type": "string"},
-        "strengths": {"type": "array", "items": {"type": "string"}},
-        "section_groups": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "name": {"type": "string"},
-                    "pages": {"type": "string"},
-                    "focus": {"type": "string"},
-                },
-                "required": ["name", "pages", "focus"],
-                "additionalProperties": False,
-            },
-        },
-        "headline_claims": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "claim": {"type": "string"},
-                    "location": {"type": "string"},
-                },
-                "required": ["claim", "location"],
-                "additionalProperties": False,
-            },
-        },
-    },
-    "required": ["title", "field", "summary", "strengths", "section_groups", "headline_claims"],
-    "additionalProperties": False,
-}
+JSON_ONLY = """
 
-FINDINGS_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "findings": {
-            "type": "array",
-            "items": {
-                "type": "object",
-                "properties": {
-                    "title": {"type": "string"},
-                    "kind": {"type": "string", "enum": ["substantive", "editorial", "structure", "clarity", "naturalness"]},
-                    "certainty": {"type": "string", "enum": ["definitive", "potential"]},
-                    "severity": {"type": "string", "enum": ["major", "moderate", "minor"]},
-                    "section_group": {"type": "string"},
-                    "location": {"type": "string"},
-                    "quote": {"type": "string"},
-                    "issue": {"type": "string"},
-                    "suggestion": {"type": "string"},
-                    "sources": {
-                        "type": "array",
-                        "items": {
-                            "type": "object",
-                            "properties": {
-                                "title": {"type": "string"},
-                                "url": {"type": "string"},
-                            },
-                            "required": ["title", "url"],
-                            "additionalProperties": False,
-                        },
-                    },
-                },
-                "required": [
-                    "title",
-                    "kind",
-                    "certainty",
-                    "severity",
-                    "section_group",
-                    "location",
-                    "quote",
-                    "issue",
-                    "suggestion",
-                    "sources",
-                ],
-                "additionalProperties": False,
-            },
-        }
-    },
-    "required": ["findings"],
-    "additionalProperties": False,
-}
+Reply with one JSON object and nothing else: no introduction, no code fence, no closing remark. \
+{shape}"""
 
-WRITING_SCHEMA = {
-    "type": "object",
-    "properties": {
-        "assessment": {"type": "string"},
-        "findings": FINDINGS_SCHEMA["properties"]["findings"],
-    },
-    "required": ["assessment", "findings"],
-    "additionalProperties": False,
-}
+MAP_SHAPE = (
+    'Use exactly these keys: "title" (string), "field" (string), "summary" (string), '
+    '"strengths" (array of strings), "section_groups" (array of objects with string keys "name", '
+    '"pages", "focus") and "headline_claims" (array of objects with string keys "claim", "location").'
+)
+
+FINDINGS_SHAPE = (
+    'Use exactly these keys: "assessment" (string, empty unless an assessment was asked for) and '
+    '"findings" (array of objects). Each finding has the string keys "title", "kind", "certainty", '
+    '"severity", "section_group", "location", "quote", "issue", "suggestion", and the key "sources" '
+    '(array of objects with string keys "title" and "url").'
+)
+
+FINDING_KEYS = ("title", "kind", "certainty", "severity", "section_group", "location", "quote", "issue", "suggestion")
 
 
 def finding_fields() -> str:

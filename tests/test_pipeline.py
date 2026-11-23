@@ -51,6 +51,9 @@ class StubStream:
     def __exit__(self, *exc):
         return False
 
+    def __iter__(self):
+        return iter(["event"])
+
     def get_final_message(self):
         return self.msg
 
@@ -70,7 +73,8 @@ class StubClient:
         if instruction.startswith("Read the whole manuscript"):
             return StubStream(message(json.dumps(PLAN)))
         if instruction.startswith("Review one part"):
-            return StubStream(message(json.dumps({"findings": [finding("emissions fell by 37.8%")]})))
+            reply = "```json\n" + json.dumps({"findings": [finding("emissions fell by 37.8%")]}) + "\n```"
+            return StubStream(message(reply))
         if instruction.startswith("Audit the manuscript's numbers"):
             if not self.paused_once:
                 self.paused_once = True
@@ -83,6 +87,7 @@ class StubClient:
             f = {**finding("emissions fell by 37.8%"), "kind": "naturalness"}
             return StubStream(message(json.dumps({"assessment": "Reads stiffly.", "findings": [f]})))
         if instruction.startswith("Check the manuscript against"):
+            self.context_calls = getattr(self, "context_calls", 0) + 1
             return StubStream(message("not json"))
         self.synthesis_instruction = instruction
         return StubStream(message("# Review: A test paper"))
@@ -102,9 +107,11 @@ class PipelineTest(unittest.TestCase):
         client = StubClient()
         result = Reviewer(client, self.manuscript, Options(workers=2, style="STYLE-GUIDE-TEXT")).run()
 
-        # plan, two sections, numbers twice (paused then resumed), outside sources,
-        # structure, prose, synthesis
-        self.assertEqual(len(client.calls), 9)
+        # plan, two sections, numbers twice (paused then resumed), outside sources twice
+        # (asked again after a reply that was not JSON), structure, prose, synthesis
+        self.assertEqual(len(client.calls), 10)
+        self.assertEqual(client.context_calls, 2)
+        self.assertFalse(any("format" in c["output_config"] for c in client.calls))
         self.assertIn("STYLE-GUIDE-TEXT", client.prose_instruction)
         self.assertIn("Reads stiffly.", client.synthesis_instruction)
         self.assertIn("Well ordered.", client.synthesis_instruction)
@@ -112,7 +119,7 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("Incomplete review", result.report)
         self.assertEqual(len(result.findings), 4)
         self.assertEqual(sorted(str(f["quote_found"]) for f in result.findings), ["False", "True", "True", "True"])
-        self.assertEqual(result.usage.calls, 9)
+        self.assertEqual(result.usage.calls, 10)
 
         # Every call shares the same cached prefix: system prompt, then the manuscript.
         for call in client.calls:
@@ -140,6 +147,24 @@ class QuoteCheckerTest(unittest.TestCase):
         self.assertTrue(checker.found("Reported Scope 1 and 2 emissions ... between 2015/16 and 2024/25"))
         self.assertFalse(checker.found("emissions rose by 37.8% between 2015/16"))
         self.assertIsNone(checker.found(""))
+
+
+
+class EquationTest(unittest.TestCase):
+    def test_word_equation_to_latex(self):
+        from xml.etree import ElementTree as ET
+        from reviewtool.omml import M, _convert
+
+        ns = M.strip("{}")
+        xml = (
+            f'<m:oMath xmlns:m="{ns}">'
+            "<m:sSubSup><m:e><m:r><m:t>E</m:t></m:r></m:e><m:sub><m:r><m:t>t</m:t></m:r></m:sub>"
+            "<m:sup><m:r><m:t>*</m:t></m:r></m:sup></m:sSubSup><m:r><m:t>=</m:t></m:r>"
+            '<m:nary><m:naryPr><m:chr m:val="∑"/></m:naryPr><m:sub><m:r><m:t>f</m:t></m:r></m:sub><m:sup/>'
+            "<m:e><m:f><m:num><m:r><m:t>Q</m:t></m:r></m:num><m:den><m:r><m:t>2</m:t></m:r></m:den></m:f></m:e>"
+            "</m:nary></m:oMath>"
+        )
+        self.assertEqual(_convert(ET.fromstring(xml)), r"{E}_{t}^{*}=\sum_{f} \frac{Q}{2}")
 
 
 if __name__ == "__main__":

@@ -40,7 +40,10 @@ def load(path: Path, workdir: Path) -> Manuscript:
     if suffix in {".docx", ".doc", ".odt", ".rtf"}:
         pdf = _to_pdf(path, workdir)
         if pdf is not None:
-            return _from_pdf(pdf, path.name)
+            manuscript = _from_pdf(pdf, path.name)
+            if suffix == ".docx":
+                _attach_equations(manuscript, path)
+            return manuscript
         if suffix == ".docx":
             return _from_text(_docx_text(path), path.name)
         raise ExtractError(
@@ -111,6 +114,31 @@ def _to_pdf(path: Path, workdir: Path) -> Path | None:
     if result.returncode != 0 or not pdf.exists():
         return None
     return pdf
+
+
+def _attach_equations(manuscript: Manuscript, docx_path: Path) -> None:
+    """Add the Word file's equations as text, because the PDF conversion can drop them."""
+    from .omml import equations
+
+    found = equations(docx_path)
+    if not found:
+        return
+    lines = [
+        "The PDF above was converted from a Word file, and the conversion can leave equations "
+        "blank. These are the equations in the Word source, in document order, each with the "
+        "text that precedes it. Treat them as part of the manuscript. An equation listed here "
+        "is present in the authors' file even if its place in the PDF is empty.",
+        "",
+    ]
+    for i, (context, latex) in enumerate(found, 1):
+        lines.append(f'{i}. After "...{context}": $$ {latex} $$')
+    del manuscript.blocks[-1]["cache_control"]
+    manuscript.blocks.append({
+        "type": "text",
+        "text": "<equations_from_word_source>\n" + "\n".join(lines) + "\n</equations_from_word_source>",
+        "cache_control": {"type": "ephemeral", "ttl": "1h"},
+    })
+    manuscript.text += "\n" + "\n".join(latex for _, latex in found)
 
 
 def _docx_text(path: Path) -> str:

@@ -14,7 +14,7 @@ Create an API key in the [Claude Console](https://platform.claude.com/) and make
 export ANTHROPIC_API_KEY="your key"
 ```
 
-Word files are converted to PDF with LibreOffice, so install it if you review `.docx` files. Without it the tool sends the text only and the reviewers cannot see figures or page numbers.
+Word files are converted to PDF with LibreOffice, so install it if you review `.docx` files. The conversion can leave Word equations blank, so the tool also reads the equations from the Word file and sends them to the reviewers as LaTeX. Without it the tool sends the text only and the reviewers cannot see figures or page numbers.
 
 ## Use
 
@@ -46,7 +46,7 @@ Useful options:
 3. **Quote check.** Every passage a reviewer quoted is looked up in the manuscript text. Passages that cannot be found are flagged.
 4. **Report.** A final call merges duplicate findings, drops those the manuscript does not bear out and writes the report.
 
-Every call begins with the same system prompt and manuscript. The API stores that shared opening after the first call (prompt caching) and charges later calls about a twentieth of the normal input price to reuse it.
+Every call begins with the same system prompt and manuscript. The API stores that shared opening after the first call (prompt caching) and charges later calls about a twentieth of the normal input price to reuse it. The two reviewers that use tools cannot share the stored copy, so a run pays to store the manuscript three times.
 
 ## Writing review
 

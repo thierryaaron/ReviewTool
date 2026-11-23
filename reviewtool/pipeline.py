@@ -9,12 +9,16 @@
 4. Synthesis. One call merges the findings, drops what does not hold up and writes the report.
 
 Every call starts with the same system prompt and manuscript, so after the first call the
-manuscript is read from the prompt cache at a fraction of the normal input price.
+manuscript is read from the prompt cache at a fraction of the normal input price. The cache
+is keyed on everything that precedes the manuscript in the request, and that includes the
+tool list and any output schema. For that reason the reviewers are asked for JSON in the
+prompt, with no output schema, and only the two tool-using reviewers pay for their own copy.
 """
 
 from __future__ import annotations
 
 import json
+import re
 import sys
 import threading
 from concurrent.futures import ThreadPoolExecutor
@@ -97,6 +101,7 @@ class Result:
     plan: dict
     findings: list[dict]
     failed_passes: list[str]
+    cache_log: list[tuple[str, int, int]]
     usage: Usage
 
 
@@ -112,23 +117,23 @@ class Reviewer:
         self.options = options
         self.usage = Usage()
         self.assessments: dict[str, str] = {}
+        self.cache_log: list[tuple[str, int, int]] = []
+        self._warm: dict[str, threading.Event] = {}
+        self._warm_lock = threading.Lock()
 
-    def _call(self, label: str, instruction: str, *, schema: dict | None = None,
-              tools: list[dict] | None = None, max_tokens: int = 64000) -> str:
+    def _call(self, label: str, instruction: str, *, tools: list[dict] | None = None,
+              max_tokens: int = 64000) -> str:
         # max_tokens covers the model's thinking as well as its answer, so it is set generously.
         opts = self.options
         messages: list[dict] = [
             {"role": "user", "content": [*self.manuscript.blocks, {"type": "text", "text": instruction}]}
         ]
-        output_config: dict = {"effort": opts.effort}
-        if schema is not None:
-            output_config["format"] = {"type": "json_schema", "schema": schema}
         kwargs: dict = {
             "model": opts.model,
             "max_tokens": max_tokens,
             "system": [{"type": "text", "text": prompts.SYSTEM}],
             "thinking": {"type": "adaptive"},
-            "output_config": output_config,
+            "output_config": {"effort": opts.effort},
         }
         if tools:
             kwargs["tools"] = tools
@@ -136,15 +141,36 @@ class Reviewer:
             kwargs["betas"] = [FALLBACK_BETA]
             kwargs["fallbacks"] = "default"
 
+        # Calls with the same tool list share a cache entry, but an entry can only be read
+        # once the call that writes it has begun to answer. The first call for each tool
+        # list goes ahead, and the others wait for it so that they read instead of write.
+        key = json.dumps(tools or [], sort_keys=True)
+        with self._warm_lock:
+            warm = self._warm.get(key)
+            first = warm is None
+            if first:
+                warm = self._warm[key] = threading.Event()
+        if not first:
+            warm.wait(timeout=300)
+
         message = None
-        for _ in range(MAX_PAUSE_RESUMES + 1):
-            with self.client.beta.messages.stream(messages=messages, **kwargs) as stream:
-                message = stream.get_final_message()
-            self.usage.add(message.usage)
-            if message.stop_reason != "pause_turn":
-                break
-            # A long tool-using turn paused on the server. Sending it back resumes it.
-            messages.append({"role": "assistant", "content": message.content})
+        read = written = 0
+        try:
+            for _ in range(MAX_PAUSE_RESUMES + 1):
+                with self.client.beta.messages.stream(messages=messages, **kwargs) as stream:
+                    for _event in stream:
+                        warm.set()
+                    message = stream.get_final_message()
+                self.usage.add(message.usage)
+                read += getattr(message.usage, "cache_read_input_tokens", 0) or 0
+                written += getattr(message.usage, "cache_creation_input_tokens", 0) or 0
+                if message.stop_reason != "pause_turn":
+                    break
+                # A long tool-using turn paused on the server. Sending it back resumes it.
+                messages.append({"role": "assistant", "content": message.content})
+        finally:
+            warm.set()
+        self.cache_log.append((label, read, written))
 
         if message.stop_reason == "refusal":
             details = getattr(message, "stop_details", None)
@@ -153,32 +179,42 @@ class Reviewer:
         if message.stop_reason == "pause_turn":
             raise ReviewError(f"{label}: the tool-using turn did not finish.")
         if message.stop_reason == "max_tokens":
-            if schema is not None:
-                raise ReviewError(f"{label}: the output was cut off at the token limit.")
-            _log(f"  warning: {label} was cut off at the token limit.")
+            raise ReviewError(f"{label}: the output was cut off at the token limit.")
 
         texts = [block.text for block in message.content if block.type == "text" and block.text.strip()]
         if not texts:
             raise ReviewError(f"{label}: the model returned no text.")
         # With tools, the model may write notes between tool calls. The answer is the last text block.
-        return texts[-1] if schema is not None else "\n\n".join(texts)
+        return texts[-1]
 
-    def _call_json(self, label: str, instruction: str, schema: dict, **kwargs) -> dict:
-        text = self._call(label, instruction, schema=schema, **kwargs)
-        try:
-            return json.loads(text)
-        except json.JSONDecodeError as exc:
-            raise ReviewError(f"{label}: the output was not valid JSON ({exc}).") from exc
+    def _call_json(self, label: str, instruction: str, shape: str, **kwargs) -> dict:
+        instruction += prompts.JSON_ONLY.format(shape=shape)
+        error: Exception | None = None
+        for _attempt in range(2):
+            text = self._call(label, instruction, **kwargs)
+            match = re.search(r"\{.*\}", text, re.DOTALL)
+            try:
+                data = json.loads(match.group(0)) if match else None
+            except json.JSONDecodeError as exc:
+                error, data = exc, None
+            if isinstance(data, dict):
+                return data
+            _log(f"  {label}: the reply was not valid JSON, asking again.")
+        raise ReviewError(f"{label}: the output was not valid JSON ({error}).")
 
-    def _findings_pass(self, label: str, instruction: str, tools: list[dict] | None = None,
-                       schema: dict = prompts.FINDINGS_SCHEMA) -> list[dict]:
+    def _findings_pass(self, label: str, instruction: str, tools: list[dict] | None = None) -> list[dict]:
         _log(f"  started: {label}")
-        data = self._call_json(label, instruction, schema, tools=tools)
-        findings = data.get("findings", [])
-        if data.get("assessment"):
-            self.assessments[label] = data["assessment"]
-        for finding in findings:
+        data = self._call_json(label, instruction, prompts.FINDINGS_SHAPE, tools=tools)
+        findings = []
+        for item in data.get("findings") or []:
+            if not isinstance(item, dict):
+                continue
+            finding = {key: str(item.get(key, "")) for key in prompts.FINDING_KEYS}
+            finding["sources"] = [s for s in item.get("sources") or [] if isinstance(s, dict)]
             finding["reviewer"] = label
+            findings.append(finding)
+        if data.get("assessment"):
+            self.assessments[label] = str(data["assessment"])
         _log(f"  finished: {label} ({len(findings)} findings)")
         return findings
 
@@ -187,15 +223,20 @@ class Reviewer:
 
         _log("Reading the manuscript and planning the review...")
         plan = self._call_json(
-            "plan", prompts.MAP.format(n_groups=opts.max_groups), prompts.MAP_SCHEMA
+            "plan", prompts.MAP.format(n_groups=opts.max_groups), prompts.MAP_SHAPE
         )
-        groups = plan["section_groups"][: opts.max_groups]
+        groups = [
+            {k: str(g.get(k, "")) for k in ("name", "pages", "focus")}
+            for g in plan.get("section_groups") or [] if isinstance(g, dict) and g.get("name")
+        ][: opts.max_groups]
         if not groups:
             raise ReviewError("The plan contained no section groups.")
+        plan["headline_claims"] = [c for c in plan.get("headline_claims") or [] if isinstance(c, dict)]
+        plan.setdefault("field", "not stated")
         group_list = "; ".join(f'"{g["name"]}" (pages {g["pages"]})' for g in groups)
         fields = prompts.finding_fields()
 
-        passes: list[tuple[str, str, list[dict] | None, dict]] = []
+        passes: list[tuple[str, str, list[dict] | None]] = []
         for group in groups:
             passes.append((
                 f"section: {group['name']}",
@@ -204,34 +245,29 @@ class Reviewer:
                     groups=group_list, finding_fields=fields,
                 ),
                 None,
-                prompts.FINDINGS_SCHEMA,
             ))
-        claims = "\n".join(f"- {c['claim']} ({c['location']})" for c in plan["headline_claims"]) or "- none listed"
+        claims = "\n".join(f"- {c.get('claim', '')} ({c.get('location', '')})" for c in plan["headline_claims"]) or "- none listed"
         passes.append((
             "numbers",
             prompts.NUMBERS.format(claims=claims, groups=group_list, finding_fields=fields),
             [CODE_EXECUTION_TOOL] if opts.code else None,
-            prompts.FINDINGS_SCHEMA,
         ))
         if opts.web:
             passes.append((
                 "outside sources",
                 prompts.CONTEXT.format(field=plan["field"], groups=group_list, finding_fields=fields),
                 [WEB_SEARCH_TOOL],
-                prompts.FINDINGS_SCHEMA,
             ))
         if opts.writing:
             passes.append((
                 "structure",
                 prompts.STRUCTURE.format(groups=group_list, finding_fields=fields),
                 None,
-                prompts.WRITING_SCHEMA,
             ))
             passes.append((
                 "prose",
                 prompts.PROSE.format(style=opts.style, groups=group_list, finding_fields=fields),
                 None,
-                prompts.WRITING_SCHEMA,
             ))
 
         _log(f"Running {len(passes)} reviewers...")
@@ -239,8 +275,8 @@ class Reviewer:
         failed: list[str] = []
         with ThreadPoolExecutor(max_workers=max(1, opts.workers)) as pool:
             futures = [
-                (label, pool.submit(self._findings_pass, label, text, tools, schema))
-                for label, text, tools, schema in passes
+                (label, pool.submit(self._findings_pass, label, text, tools))
+                for label, text, tools in passes
             ]
             for label, future in futures:
                 try:
@@ -276,4 +312,5 @@ class Reviewer:
                 "\n\n---\n\n**Incomplete review.** These reviewers failed and their part of the "
                 "manuscript was not checked: " + ", ".join(failed) + "."
             )
-        return Result(report=report, plan=plan_for_report, findings=findings, failed_passes=failed, usage=self.usage)
+        return Result(report=report, plan=plan_for_report, findings=findings, failed_passes=failed,
+                      cache_log=self.cache_log, usage=self.usage)

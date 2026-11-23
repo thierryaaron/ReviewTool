@@ -114,6 +114,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"Tokens:   {usage.input:,} input, {usage.cache_read:,} read from cache, "
           f"{usage.cache_write:,} written to cache, {usage.output:,} output, over {usage.calls} calls",
           file=sys.stderr)
+    writers = [label for label, _read, written in result.cache_log if written > 0]
+    print(f"Cache:    the manuscript was written to the cache by {len(writers)} of {len(result.cache_log)} "
+          f"calls ({', '.join(writers)})", file=sys.stderr)
     cost = usage.cost(args.model)
     if cost is None:
         print(f"Cost:     no price on file for {args.model} (known: {', '.join(PRICES)})", file=sys.stderr)
