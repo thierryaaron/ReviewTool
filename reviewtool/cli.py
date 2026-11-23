@@ -27,7 +27,7 @@ def main(argv: list[str] | None = None) -> int:
                         help="how hard the model thinks (default: high)")
     parser.add_argument("--groups", type=int, default=5, help="maximum number of section groups (default: 5)")
     parser.add_argument("--workers", type=int, default=3, help="reviewers running at once (default: 3)")
-    parser.add_argument("--notes", default="", help='context for the reviewers, e.g. "target journal: Nature Climate Change"')
+    parser.add_argument("--notes", default="", help='target journal and any other context, e.g. "target journal: Ecology Letters, Letter format"')
     parser.add_argument("--detail", default="standard", choices=["essential", "standard", "exhaustive"],
                         help="essential: major and moderate findings only. standard: those plus the ten most "
                              "useful minor ones (default). exhaustive: everything that passes the materiality test")
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     findings_path = args.out / f"{stem}-findings.json"
     report_path.write_text(result.report, encoding="utf-8")
     findings_path.write_text(
-        json.dumps({"plan": result.plan, "findings": result.findings}, indent=2, ensure_ascii=False),
+        json.dumps({"plan": result.plan, "overview": result.overview, "findings": result.findings}, indent=2, ensure_ascii=False),
         encoding="utf-8",
     )
 

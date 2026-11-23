@@ -43,9 +43,9 @@ Useful options:
 ## How it works
 
 1. **Plan.** One call reads the manuscript, summarises it, lists the claims the argument depends on and splits the paper into section groups.
-2. **Review.** Each section group gets a close reading by its own reviewer. A numbers reviewer redoes the paper's arithmetic with a code execution tool. An outside-sources reviewer searches the web for omitted literature, policy and standards. Two writing reviewers assess the paper's structure and its prose, the second judging clarity and naturalness against the style guide in `reviewtool/style.md`. All of these run in parallel.
+2. **Review.** Each section group gets a close reading by its own reviewer. A numbers reviewer redoes the paper's arithmetic with a code execution tool. An outside-sources reviewer searches the web for omitted literature, policy and standards. A senior referee reads the paper whole and judges its contribution, the status of each result, whether the conclusions follow, what the reader has to keep track of, where it can be shortened and how the narrative could be tightened. Two writing reviewers assess the paper's structure and its prose, the second judging clarity and naturalness against the style guide in `reviewtool/style.md`. All of these run in parallel.
 3. **Quote check.** Every passage a reviewer quoted is looked up in the manuscript text. Passages that cannot be found are flagged.
-4. **Report.** A final call merges duplicate findings, drops those the manuscript does not bear out and writes the report.
+4. **Report.** A final call builds the report around the senior referee's assessment, checks it against the manuscript, merges duplicate findings and drops those the manuscript does not bear out. The report opens with an overall assessment and the main concerns argued in full, then covers clarity, length, narrative and a priority list, and ends with the detailed findings by section.
 
 Every call begins with the same system prompt and manuscript. The API stores that shared opening after the first call (prompt caching) and charges later calls about a twentieth of the normal input price to reuse it. The two reviewers that use tools cannot share the stored copy, so a run pays to store the manuscript three times.
 

@@ -4,7 +4,9 @@
 2. Review. Each section group gets its own close reading. Two more reviewers run beside
    them: one audits the numbers with a code execution tool, the other checks the paper
    against outside sources with web search. Two writing reviewers assess the structure
-   and the prose. These calls run in parallel.
+   and the prose. A senior referee reads the paper whole and writes an overall assessment:
+   contribution, status of each result, whether the conclusions follow, the reader's burden,
+   length and narrative. These calls run in parallel.
 3. Check. Every quoted passage is looked up in the manuscript text.
 4. Synthesis. One call merges the findings, drops what does not hold up and writes the report.
 
@@ -101,6 +103,7 @@ class Result:
     report: str
     plan: dict
     findings: list[dict]
+    overview: str
     failed_passes: list[str]
     cache_log: list[tuple[str, int, int]]
     usage: Usage
@@ -271,10 +274,19 @@ class Reviewer:
                 None,
             ))
 
-        _log(f"Running {len(passes)} reviewers...")
+        journal = prompts.JOURNAL_KNOWN.format(notes=opts.notes) if opts.notes else prompts.JOURNAL_UNKNOWN
+
+        def overview_pass() -> str:
+            _log("  started: whole-paper assessment")
+            text = self._call("whole-paper assessment", prompts.EDITOR.format(journal=journal))
+            _log("  finished: whole-paper assessment")
+            return text
+
+        _log(f"Running {len(passes) + 1} reviewers...")
         findings: list[dict] = []
         failed: list[str] = []
         with ThreadPoolExecutor(max_workers=max(1, opts.workers)) as pool:
+            overview_future = pool.submit(overview_pass)
             futures = [
                 (label, pool.submit(self._findings_pass, label, text, tools))
                 for label, text, tools in passes
@@ -286,6 +298,12 @@ class Reviewer:
                     # One failed reviewer should not cost the whole review. It is named in the report.
                     failed.append(label)
                     _log(f"  failed: {label}: {exc}")
+            try:
+                overview = overview_future.result()
+            except (ReviewError, anthropic.APIError) as exc:
+                overview = ""
+                failed.append("whole-paper assessment")
+                _log(f"  failed: whole-paper assessment: {exc}")
         if not findings and failed:
             raise ReviewError("Every reviewer failed. See the messages above.")
 
@@ -310,6 +328,7 @@ class Reviewer:
             prompts.SYNTHESIS.format(
                 notes=notes,
                 plan=json.dumps(plan_for_report, indent=1, ensure_ascii=False),
+                overview=overview or "not available",
                 assessments=json.dumps(self.assessments, indent=1, ensure_ascii=False) if self.assessments else "none",
                 findings=json.dumps(findings_for_report, indent=1, ensure_ascii=False),
                 detail=prompts.DETAIL[opts.detail],
@@ -321,5 +340,5 @@ class Reviewer:
                 "\n\n---\n\n**Incomplete review.** These reviewers failed and their part of the "
                 "manuscript was not checked: " + ", ".join(failed) + "."
             )
-        return Result(report=report, plan=plan_for_report, findings=findings, failed_passes=failed,
+        return Result(report=report, plan=plan_for_report, findings=findings, overview=overview, failed_passes=failed,
                       cache_log=self.cache_log, usage=self.usage)

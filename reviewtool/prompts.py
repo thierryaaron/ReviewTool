@@ -10,6 +10,9 @@ explains what is wrong and why it matters to the paper's argument, and says what
 When a claim rests on numbers, redo the arithmetic from the figures the manuscript reports and \
 show the working. When two parts of the manuscript disagree, quote both.
 
+For a serious problem, say what it undermines and what it leaves standing. A flaw in one \
+step rarely sinks a whole paper, and the authors need to know how far the damage reaches.
+
 Be honest about certainty. Call a finding "definitive" only when the manuscript itself proves it, \
 such as a missing equation, an unfilled template placeholder or two numbers that cannot both be \
 right. Everything that depends on interpretation, on data you cannot see or on outside knowledge \
@@ -119,6 +122,8 @@ manuscript omits and that a referee in this field would expect to see discussed;
 - claims about the state of the literature, the law or policy that are out of date or contradicted \
 by a source you can find;
 - methods used in a way that departs from the accepted standard or guidance for that method;
+- a specific fact or figure that the manuscript attributes to a cited source and leans on, where \
+you can open the source and it says something different or does not contain the figure;
 - references that look wrong, such as a mismatched year, author or title, or a broken URL pattern.
 
 Search before you assert. Report a gap only when you have found a specific source, and list that \
@@ -188,66 +193,146 @@ Section groups in this manuscript: {groups}
 {finding_fields}
 """
 
-SYNTHESIS = """\
-Several reviewers have examined this manuscript independently. Their findings are below as JSON. \
-Write the final review report in Markdown.
+EDITOR = """\
+You are the senior referee who reads the paper whole. Other reviewers are checking it line by \
+line, auditing its numbers and searching the literature, so leave local errors to them. Your job \
+is the judgement they cannot make from one section: what the paper contributes, whether its \
+argument holds together, and what would make it a better paper.
 
-Before writing, go through the findings against the manuscript:
+{journal}Think it through before you write, then write a developed assessment in Markdown prose. Reason \
+each point out as you would in a careful referee report: quote the manuscript, show working where \
+a claim rests on numbers, and give concrete replacement wording where wording is the problem. \
+Depth on the few things that decide the paper's fate is worth more than coverage. Use these \
+headings, and leave one out if you have nothing of substance to say under it.
+
+## Verdict
+Is the central contribution sound and worth publishing? Is the manuscript ready to submit to its \
+target journal as it stands, and if not, what is the main thing holding it back? Say what you \
+could and could not check from the manuscript alone, such as code you could not run or data you \
+could not see.
+
+## The contribution and its hierarchy
+State the paper's results in order of importance. Which one is the intellectual centre, which \
+support it, and which are side issues that compete with it for the reader's attention?
+
+## Status of each main result
+For each main result, say what kind of claim it is: general, exact under the paper's model, an \
+approximation, conditional on a stated assumption, or an empirical pattern. Then say where the \
+text presents a result as stronger or more general than its status allows, and where a \
+qualification sits in a supplement or a late section when the reader needs it beside the claim.
+
+## Whether the conclusions follow
+Look hardest at the step from results to conclusions. Does each inference follow, or only part \
+of it? What can the evidence establish and what can it not? Where an analysis rests on a few \
+influential observations, a debatable definition or a strong assumption, say how it should be \
+presented given that.
+
+## The reader's burden
+Consider a reader from the journal's audience who is not a specialist in the method. Which \
+quantities, symbols and terms must they keep track of, and where is one used in two senses or \
+introduced before its purpose is clear? Where would a plain-language explanation or a small \
+worked numerical example unlock a result? Write the explanation or the example.
+
+## Length and focus
+Go through the paper section by section and say what to keep, condense, merge, move to the \
+supplement or cut, with an approximate saving in words for each. Name any passage that pursues \
+an implication too far from the central result.
+
+## What to preserve
+The parts that make the paper worth reading, which a revision must not weaken.
+
+## A tighter narrative
+The sequence of points the paper should make, in order, each in a sentence or two.
+"""
+
+JOURNAL_KNOWN = (
+    "The authors say this about where the paper is going: {notes}\n\n"
+)
+JOURNAL_UNKNOWN = (
+    "The authors have not named a target journal. Work out from the manuscript which journal or "
+    "kind of journal it is written for, say which you assumed, and judge it against that.\n\n"
+)
+
+SYNTHESIS = """\
+Several reviewers have examined this manuscript independently. One senior referee read it whole \
+and wrote an overall assessment. The others read it section by section, audited its numbers, \
+searched outside sources and assessed its writing, and reported findings as JSON. Write the final \
+review report in Markdown, for the authors.
+
+The report should read as one referee's considered judgement, not as a list of tickets. Build it \
+around the overall assessment, strengthened and corrected by the detailed findings. Before \
+writing, test both against the manuscript:
+- Check each claim in the overall assessment. Keep what holds, correct what does not, and add \
+the evidence, calculations and sources the detailed findings supply.
 - Merge findings that describe the same problem and keep the best evidence from each.
 - Drop any finding the manuscript does not bear out. A finding marked "quote_found": false quotes \
 a passage that an automatic check could not find in the manuscript text. That check can miss \
 passages with unusual characters, so look for the passage yourself and drop the finding if it is \
 not there.
-- Where two findings contradict each other, work out which is right.
-- Keep the calculations and the outside sources. They are what make a finding checkable.
+- Where two reviewers contradict each other, work out which is right.
 - Guard against nit-picking. Judge each finding afresh by whether a careful referee would raise \
 it and whether the authors would change the paper because of it. Drop those that fail, and lower \
 the severity of any the reviewer overstated. {detail}
-- Give space in proportion to importance. A major finding gets a full explanation, a moderate \
-one a short paragraph, and a minor one a line.
 
 Use this structure:
 
 # Review: <manuscript title>
 
-## Summary
-One paragraph on what the paper does and finds.
+## Overall assessment
+Three or four paragraphs. What the paper contributes and whether that contribution is sound. \
+Whether it is ready for its target journal, and the main thing holding it back. What this review \
+could and could not check.
 
-## Strengths
-Three to five bullets, each with a bold lead-in.
+## Main concerns
+The three to seven problems that matter most, most serious first, each under a `###` heading \
+that states the problem. Develop each one fully: what the manuscript claims, quoted; why that is \
+a problem, with working shown for any calculation; what the problem undermines and what it leaves \
+standing; and what the authors should do, with replacement wording where wording is the issue. \
+A concern may draw on several reviewers' findings. Write these as argued prose.
 
-## Weaknesses
-The three to six most serious problems, most serious first, each a bullet with a bold lead-in \
-and a few sentences. Cite outside sources by title, author or body, and year.
+## Clarity for the journal's readers
+What a reader must keep track of, where terms or symbols are used inconsistently, and where an \
+intuitive explanation or a worked numerical example would help. Give the suggested explanations \
+and examples in full, and include the clarity findings worth acting on.
 
-## Potential issues and suggestions
-One subsection per section group, in manuscript order, headed \
-`### <group name> (pages <pages>)`. Inside each:
+## Length and focus
+A table with one row per section of the manuscript: the recommendation and the approximate words \
+saved. Then a short paragraph on any tangent to cut and on structural moves worth making.
 
-#### Potential mistakes and improvements
-Numbered substantive findings. Start each with a bold title, then the location and whether it is \
-a **Definitive flaw** or a **Potential concern**. Quote the passage in italics, explain the \
-problem with any working, and end with the suggested change.
+## What to preserve
+A short list of what a revision must not weaken.
 
-#### Minor corrections and typos
-Bullets for editorial findings, each starting with the location in bold.
+## A tighter narrative
+The sequence of points the paper should make, as a numbered list.
 
-## Structure and writing
-Include this section only if writing assessments or findings of kind "structure", "clarity" or \
-"naturalness" are provided. Give it three subsections, `### Structure`, `### Clarity` and \
-`### Naturalness`. Open each with the reviewer's overall assessment, then list the findings, \
-most serious first. For each, quote the original passage in italics and give the suggested \
-rewrite or reorganisation. For a recurring pattern, keep the examples and their locations. \
-Keep these findings out of the per-section subsections above.
+## Priority list
+A table of actions in order, each marked Essential, High or Medium. Essential means the paper \
+should not be submitted without it.
 
-End the "Potential issues and suggestions" part with one line stating how many reviewer findings \
-you left out as immaterial or unsupported.
+## Detailed findings by section
+Findings not already covered under Main concerns, one subsection per section group in manuscript \
+order, headed `### <group name> (pages <pages>)`. Number the substantive ones. Start each with a \
+bold title, then the location and whether it is a **Definitive flaw** or a **Potential \
+concern**. Quote the passage in italics, explain the problem and give the change. Keep these \
+brief: a moderate finding gets a short paragraph and a minor one a line. Put editorial slips in \
+a closing bullet list within each subsection. End this part with one line stating how many \
+reviewer findings were left out as immaterial or unsupported.
 
-Leave out a heading if nothing belongs under it. Write mathematics in LaTeX with $...$. \
-End the report with a section `## Sources` listing every outside source cited, with its URL.
+## Writing habits
+Recurring habits of prose from the naturalness findings, each with quoted examples and a rewrite.
+
+## Sources
+Every outside source cited, with its URL.
+
+Leave out a heading if nothing belongs under it. Write inline mathematics in plain Unicode \
+symbols, such as ε_L, S_obs² and ≤, and put a displayed formula in a fenced code block marked \
+latex. The report will be read in a document editor that does not render dollar-sign maths.
 
 {notes}Manuscript plan:
 {plan}
+
+Overall assessment from the senior referee:
+{overview}
 
 Writing assessments:
 {assessments}

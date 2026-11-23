@@ -80,6 +80,9 @@ class StubClient:
                 self.paused_once = True
                 return StubStream(message("working", stop_reason="pause_turn"))
             return StubStream(message(json.dumps({"findings": [finding("a passage that is not in the paper at all")]})))
+        if instruction.startswith("You are the senior referee"):
+            self.editor_instruction = instruction
+            return StubStream(message("## Verdict\nSound but not ready."))
         if instruction.startswith("Assess how the manuscript is organised"):
             return StubStream(message(json.dumps({"assessment": "Well ordered.", "findings": []})))
         if instruction.startswith("Assess the manuscript's prose"):
@@ -109,7 +112,7 @@ class PipelineTest(unittest.TestCase):
 
         # plan, two sections, numbers twice (paused then resumed), outside sources twice
         # (asked again after a reply that was not JSON), structure, prose, synthesis
-        self.assertEqual(len(client.calls), 10)
+        self.assertEqual(len(client.calls), 11)
         self.assertEqual(client.context_calls, 2)
         self.assertFalse(any("format" in c["output_config"] for c in client.calls))
         self.assertIn("STYLE-GUIDE-TEXT", client.prose_instruction)
@@ -119,7 +122,9 @@ class PipelineTest(unittest.TestCase):
         self.assertIn("Incomplete review", result.report)
         self.assertEqual(len(result.findings), 4)
         self.assertEqual(sorted(str(f["quote_found"]) for f in result.findings), ["False", "True", "True", "True"])
-        self.assertEqual(result.usage.calls, 10)
+        self.assertEqual(result.usage.calls, 11)
+        self.assertIn("Sound but not ready.", client.synthesis_instruction)
+        self.assertIn("have not named a target journal", client.editor_instruction)
 
         # Every call shares the same cached prefix: system prompt, then the manuscript.
         for call in client.calls:
@@ -142,8 +147,8 @@ class PipelineTest(unittest.TestCase):
     def test_tools_and_flags(self):
         client = StubClient()
         Reviewer(client, self.manuscript, Options(web=False, code=False, fallback=False, writing=False, model="claude-haiku-5-5")).run()
-        # plan, two sections, numbers twice (paused then resumed), synthesis
-        self.assertEqual(len(client.calls), 6)
+        # plan, two sections, numbers twice (paused then resumed), whole-paper assessment, synthesis
+        self.assertEqual(len(client.calls), 7)
         self.assertFalse(any("tools" in c for c in client.calls))
         self.assertFalse(any("fallbacks" in c for c in client.calls))
 
