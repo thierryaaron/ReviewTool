@@ -127,7 +127,8 @@ class PipelineTest(unittest.TestCase):
     def test_tools_and_flags(self):
         client = StubClient()
         Reviewer(client, self.manuscript, Options(web=False, code=False, fallback=False, writing=False, model="claude-haiku-5-5")).run()
-        self.assertEqual(len(client.calls), 5)
+        # plan, two sections, numbers twice (paused then resumed), synthesis
+        self.assertEqual(len(client.calls), 6)
         self.assertFalse(any("tools" in c for c in client.calls))
         self.assertFalse(any("fallbacks" in c for c in client.calls))
 
