@@ -114,7 +114,8 @@ class Reviewer:
         self.assessments: dict[str, str] = {}
 
     def _call(self, label: str, instruction: str, *, schema: dict | None = None,
-              tools: list[dict] | None = None, max_tokens: int = 32000) -> str:
+              tools: list[dict] | None = None, max_tokens: int = 64000) -> str:
+        # max_tokens covers the model's thinking as well as its answer, so it is set generously.
         opts = self.options
         messages: list[dict] = [
             {"role": "user", "content": [*self.manuscript.blocks, {"type": "text", "text": instruction}]}
@@ -186,7 +187,7 @@ class Reviewer:
 
         _log("Reading the manuscript and planning the review...")
         plan = self._call_json(
-            "plan", prompts.MAP.format(n_groups=opts.max_groups), prompts.MAP_SCHEMA, max_tokens=16000
+            "plan", prompts.MAP.format(n_groups=opts.max_groups), prompts.MAP_SCHEMA
         )
         groups = plan["section_groups"][: opts.max_groups]
         if not groups:
