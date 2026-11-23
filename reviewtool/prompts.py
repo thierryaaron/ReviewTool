@@ -25,7 +25,8 @@ _FINDING_FIELDS = """\
 For each finding give:
 - title: a short imperative label, for example "Clarify the denominator for the 20 largest emitters' share".
 - kind: "substantive" for problems of logic, method, evidence, framing or missing context. \
-"editorial" for typos, rounding mismatches, formatting, broken references and wording.
+"editorial" for typos, rounding mismatches, formatting and broken references. \
+"structure", "clarity" and "naturalness" are for the writing reviewers only.
 - certainty: "definitive" or "potential", as defined above.
 - severity: "major" if it could change a conclusion or would likely draw a rejection or major revision, \
 "moderate" if a referee would require a fix, "minor" otherwise.
@@ -115,6 +116,59 @@ Section groups in this manuscript: {groups}
 {finding_fields}
 """
 
+STRUCTURE = """\
+Assess how the manuscript is organised. Leave the correctness of its content to other reviewers.
+
+Consider:
+- whether the abstract, introduction and conclusion state the same question, findings and \
+contribution, and whether each promise made in the introduction is kept;
+- whether the sections come in the order a reader needs, and whether any material sits in the \
+wrong section, such as results in the methods or new evidence in the conclusion;
+- whether the argument can be followed from one section to the next and from one paragraph to the next;
+- whether each paragraph has one job, and whether any are overloaded or out of sequence;
+- repetition between sections, and material that could be cut or moved to a supplement;
+- whether headings describe their contents, and whether figures and tables are introduced \
+where the reader needs them;
+- the balance of length between sections given what the paper is arguing.
+
+Use kind "structure" for every finding. In "suggestion", say what to move, merge, split or cut \
+and where it should go. In "assessment", give a paragraph on how well the structure serves the \
+argument, naming the one or two changes that would help most.
+
+Section groups in this manuscript: {groups}
+
+{finding_fields}
+"""
+
+PROSE = """\
+Assess the manuscript's prose for clarity and for naturalness, using the style guide below. \
+Leave the correctness of its content to other reviewers, and leave typos to them too.
+
+<style_guide>
+{style}
+</style_guide>
+
+Read the whole manuscript. Work in two ways:
+- Patterns. Where a habit recurs across the paper, report it once as a finding, say roughly how \
+often it occurs, and quote three or four examples with their locations in "issue". Put the \
+clearest example in "quote" and a rewrite of that example in "suggestion".
+- Passages. Report the individual sentences or paragraphs that most need rewriting, each with \
+the passage in "quote" and your rewrite in "suggestion".
+
+A rewrite must keep the authors' meaning, their technical terms and their level of hedging, and \
+it must itself follow the style guide. Use kind "clarity" when a reader would struggle to \
+understand the passage and kind "naturalness" when it is understandable but reads as formulaic \
+or machine-written. Severity is "major" for a problem that pervades the paper or obscures a \
+central claim, "moderate" for a recurring habit, and "minor" for a single passage.
+
+In "assessment", give a paragraph on how the prose reads overall, covering clarity and \
+naturalness in turn, and say which sections are strongest and weakest.
+
+Section groups in this manuscript: {groups}
+
+{finding_fields}
+"""
+
 SYNTHESIS = """\
 Several reviewers have examined this manuscript independently. Their findings are below as JSON. \
 Write the final review report in Markdown.
@@ -154,11 +208,22 @@ problem with any working, and end with the suggested change.
 #### Minor corrections and typos
 Bullets for editorial findings, each starting with the location in bold.
 
+## Structure and writing
+Include this section only if writing assessments or findings of kind "structure", "clarity" or \
+"naturalness" are provided. Give it three subsections, `### Structure`, `### Clarity` and \
+`### Naturalness`. Open each with the reviewer's overall assessment, then list the findings, \
+most serious first. For each, quote the original passage in italics and give the suggested \
+rewrite or reorganisation. For a recurring pattern, keep the examples and their locations. \
+Keep these findings out of the per-section subsections above.
+
 Leave out a heading if nothing belongs under it. Write mathematics in LaTeX with $...$. \
 End the report with a section `## Sources` listing every outside source cited, with its URL.
 
 {notes}Manuscript plan:
 {plan}
+
+Writing assessments:
+{assessments}
 
 Reviewer findings:
 {findings}
@@ -210,7 +275,7 @@ FINDINGS_SCHEMA = {
                 "type": "object",
                 "properties": {
                     "title": {"type": "string"},
-                    "kind": {"type": "string", "enum": ["substantive", "editorial"]},
+                    "kind": {"type": "string", "enum": ["substantive", "editorial", "structure", "clarity", "naturalness"]},
                     "certainty": {"type": "string", "enum": ["definitive", "potential"]},
                     "severity": {"type": "string", "enum": ["major", "moderate", "minor"]},
                     "section_group": {"type": "string"},
@@ -248,6 +313,16 @@ FINDINGS_SCHEMA = {
         }
     },
     "required": ["findings"],
+    "additionalProperties": False,
+}
+
+WRITING_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "assessment": {"type": "string"},
+        "findings": FINDINGS_SCHEMA["properties"]["findings"],
+    },
+    "required": ["assessment", "findings"],
     "additionalProperties": False,
 }
 

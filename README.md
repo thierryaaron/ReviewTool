@@ -33,6 +33,8 @@ Useful options:
 | `--effort xhigh` | Think harder, at higher cost (default `high`) |
 | `--groups 8` | Split a long paper into more parts (default 5) |
 | `--workers 1` | Run reviewers one at a time if you hit rate limits |
+| `--style my-style.md` | Use your own style guide for the writing reviewers |
+| `--no-writing` | Skip the structure and prose reviewers |
 | `--no-web` | Skip the reviewer that searches for outside sources |
 | `--no-code` | Audit the numbers without the code execution tool |
 | `--no-fallback` | Do not retry on another model if the first declines a request |
@@ -40,11 +42,15 @@ Useful options:
 ## How it works
 
 1. **Plan.** One call reads the manuscript, summarises it, lists the claims the argument depends on and splits the paper into section groups.
-2. **Review.** Each section group gets a close reading by its own reviewer. A numbers reviewer redoes the paper's arithmetic with a code execution tool. An outside-sources reviewer searches the web for omitted literature, policy and standards. These run in parallel.
+2. **Review.** Each section group gets a close reading by its own reviewer. A numbers reviewer redoes the paper's arithmetic with a code execution tool. An outside-sources reviewer searches the web for omitted literature, policy and standards. Two writing reviewers assess the paper's structure and its prose, the second judging clarity and naturalness against the style guide in `reviewtool/style.md`. All of these run in parallel.
 3. **Quote check.** Every passage a reviewer quoted is looked up in the manuscript text. Passages that cannot be found are flagged.
 4. **Report.** A final call merges duplicate findings, drops those the manuscript does not bear out and writes the report.
 
 Every call begins with the same system prompt and manuscript. The API stores that shared opening after the first call (prompt caching) and charges later calls about a twentieth of the normal input price to reuse it.
+
+## Writing review
+
+The report ends with a "Structure and writing" section. It gives an overall assessment of structure, clarity and naturalness, then lists recurring habits with examples and the passages that most need rewriting, each with a suggested rewrite. Edit `reviewtool/style.md` to change what counts as a fault.
 
 ## Cost
 

@@ -3,7 +3,8 @@
 1. Map. One call reads the manuscript, summarises it and splits it into section groups.
 2. Review. Each section group gets its own close reading. Two more reviewers run beside
    them: one audits the numbers with a code execution tool, the other checks the paper
-   against outside sources with web search. These calls run in parallel.
+   against outside sources with web search. Two writing reviewers assess the structure
+   and the prose. These calls run in parallel.
 3. Check. Every quoted passage is looked up in the manuscript text.
 4. Synthesis. One call merges the findings, drops what does not hold up and writes the report.
 
@@ -56,6 +57,8 @@ class Options:
     web: bool = True
     code: bool = True
     fallback: bool = True
+    writing: bool = True
+    style: str = ""
     notes: str = ""
 
 
@@ -108,6 +111,7 @@ class Reviewer:
         self.manuscript = manuscript
         self.options = options
         self.usage = Usage()
+        self.assessments: dict[str, str] = {}
 
     def _call(self, label: str, instruction: str, *, schema: dict | None = None,
               tools: list[dict] | None = None, max_tokens: int = 32000) -> str:
@@ -165,10 +169,13 @@ class Reviewer:
         except json.JSONDecodeError as exc:
             raise ReviewError(f"{label}: the output was not valid JSON ({exc}).") from exc
 
-    def _findings_pass(self, label: str, instruction: str, tools: list[dict] | None = None) -> list[dict]:
+    def _findings_pass(self, label: str, instruction: str, tools: list[dict] | None = None,
+                       schema: dict = prompts.FINDINGS_SCHEMA) -> list[dict]:
         _log(f"  started: {label}")
-        data = self._call_json(label, instruction, prompts.FINDINGS_SCHEMA, tools=tools)
+        data = self._call_json(label, instruction, schema, tools=tools)
         findings = data.get("findings", [])
+        if data.get("assessment"):
+            self.assessments[label] = data["assessment"]
         for finding in findings:
             finding["reviewer"] = label
         _log(f"  finished: {label} ({len(findings)} findings)")
@@ -187,7 +194,7 @@ class Reviewer:
         group_list = "; ".join(f'"{g["name"]}" (pages {g["pages"]})' for g in groups)
         fields = prompts.finding_fields()
 
-        passes: list[tuple[str, str, list[dict] | None]] = []
+        passes: list[tuple[str, str, list[dict] | None, dict]] = []
         for group in groups:
             passes.append((
                 f"section: {group['name']}",
@@ -196,25 +203,44 @@ class Reviewer:
                     groups=group_list, finding_fields=fields,
                 ),
                 None,
+                prompts.FINDINGS_SCHEMA,
             ))
         claims = "\n".join(f"- {c['claim']} ({c['location']})" for c in plan["headline_claims"]) or "- none listed"
         passes.append((
             "numbers",
             prompts.NUMBERS.format(claims=claims, groups=group_list, finding_fields=fields),
             [CODE_EXECUTION_TOOL] if opts.code else None,
+            prompts.FINDINGS_SCHEMA,
         ))
         if opts.web:
             passes.append((
                 "outside sources",
                 prompts.CONTEXT.format(field=plan["field"], groups=group_list, finding_fields=fields),
                 [WEB_SEARCH_TOOL],
+                prompts.FINDINGS_SCHEMA,
+            ))
+        if opts.writing:
+            passes.append((
+                "structure",
+                prompts.STRUCTURE.format(groups=group_list, finding_fields=fields),
+                None,
+                prompts.WRITING_SCHEMA,
+            ))
+            passes.append((
+                "prose",
+                prompts.PROSE.format(style=opts.style, groups=group_list, finding_fields=fields),
+                None,
+                prompts.WRITING_SCHEMA,
             ))
 
         _log(f"Running {len(passes)} reviewers...")
         findings: list[dict] = []
         failed: list[str] = []
         with ThreadPoolExecutor(max_workers=max(1, opts.workers)) as pool:
-            futures = [(label, pool.submit(self._findings_pass, label, text, tools)) for label, text, tools in passes]
+            futures = [
+                (label, pool.submit(self._findings_pass, label, text, tools, schema))
+                for label, text, tools, schema in passes
+            ]
             for label, future in futures:
                 try:
                     findings.extend(future.result())
@@ -239,6 +265,7 @@ class Reviewer:
             prompts.SYNTHESIS.format(
                 notes=notes,
                 plan=json.dumps(plan_for_report, indent=1, ensure_ascii=False),
+                assessments=json.dumps(self.assessments, indent=1, ensure_ascii=False) if self.assessments else "none",
                 findings=json.dumps(findings, indent=1, ensure_ascii=False),
             ),
             max_tokens=64000,

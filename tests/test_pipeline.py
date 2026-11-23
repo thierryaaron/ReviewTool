@@ -76,8 +76,15 @@ class StubClient:
                 self.paused_once = True
                 return StubStream(message("working", stop_reason="pause_turn"))
             return StubStream(message(json.dumps({"findings": [finding("a passage that is not in the paper at all")]})))
+        if instruction.startswith("Assess how the manuscript is organised"):
+            return StubStream(message(json.dumps({"assessment": "Well ordered.", "findings": []})))
+        if instruction.startswith("Assess the manuscript's prose"):
+            self.prose_instruction = instruction
+            f = {**finding("emissions fell by 37.8%"), "kind": "naturalness"}
+            return StubStream(message(json.dumps({"assessment": "Reads stiffly.", "findings": [f]})))
         if instruction.startswith("Check the manuscript against"):
             return StubStream(message("not json"))
+        self.synthesis_instruction = instruction
         return StubStream(message("# Review: A test paper"))
 
 
@@ -93,15 +100,19 @@ class PipelineTest(unittest.TestCase):
 
     def test_full_run(self):
         client = StubClient()
-        result = Reviewer(client, self.manuscript, Options(workers=2)).run()
+        result = Reviewer(client, self.manuscript, Options(workers=2, style="STYLE-GUIDE-TEXT")).run()
 
-        # plan, two sections, numbers twice (paused then resumed), outside sources, synthesis
-        self.assertEqual(len(client.calls), 7)
+        # plan, two sections, numbers twice (paused then resumed), outside sources,
+        # structure, prose, synthesis
+        self.assertEqual(len(client.calls), 9)
+        self.assertIn("STYLE-GUIDE-TEXT", client.prose_instruction)
+        self.assertIn("Reads stiffly.", client.synthesis_instruction)
+        self.assertIn("Well ordered.", client.synthesis_instruction)
         self.assertEqual(result.failed_passes, ["outside sources"])
         self.assertIn("Incomplete review", result.report)
-        self.assertEqual(len(result.findings), 3)
-        self.assertEqual(sorted(str(f["quote_found"]) for f in result.findings), ["False", "True", "True"])
-        self.assertEqual(result.usage.calls, 7)
+        self.assertEqual(len(result.findings), 4)
+        self.assertEqual(sorted(str(f["quote_found"]) for f in result.findings), ["False", "True", "True", "True"])
+        self.assertEqual(result.usage.calls, 9)
 
         # Every call shares the same cached prefix: system prompt, then the manuscript.
         for call in client.calls:
@@ -115,7 +126,8 @@ class PipelineTest(unittest.TestCase):
 
     def test_tools_and_flags(self):
         client = StubClient()
-        Reviewer(client, self.manuscript, Options(web=False, code=False, fallback=False, model="claude-haiku-5-5")).run()
+        Reviewer(client, self.manuscript, Options(web=False, code=False, fallback=False, writing=False, model="claude-haiku-5-5")).run()
+        self.assertEqual(len(client.calls), 5)
         self.assertFalse(any("tools" in c for c in client.calls))
         self.assertFalse(any("fallbacks" in c for c in client.calls))
 
