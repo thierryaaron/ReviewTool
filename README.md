@@ -29,6 +29,7 @@ Useful options:
 | Option | Effect |
 | --- | --- |
 | `--notes "target journal: ..."` | Context passed to the reviewers |
+| `--detail essential` | Major and moderate findings only. `standard` (default) adds the ten most useful minor ones, `exhaustive` keeps all |
 | `--model claude-sonnet-5-5` | Use a cheaper model (default `claude-opus-5-5`) |
 | `--effort xhigh` | Think harder, at higher cost (default `high`) |
 | `--groups 8` | Split a long paper into more parts (default 5) |
@@ -47,6 +48,10 @@ Useful options:
 4. **Report.** A final call merges duplicate findings, drops those the manuscript does not bear out and writes the report.
 
 Every call begins with the same system prompt and manuscript. The API stores that shared opening after the first call (prompt caching) and charges later calls about a twentieth of the normal input price to reuse it. The two reviewers that use tools cannot share the stored copy, so a run pays to store the manuscript three times.
+
+## Guarding against nit-picking
+
+Every reviewer applies the same test before reporting a finding: would a careful referee raise it, and would the authors change the paper because of it. Each reviewer is also capped at eight to ten findings, and typos are gathered into one entry. The final call applies the test again, shortens minor findings to a line and states how many it left out. `--detail` sets how many minor findings survive.
 
 ## Writing review
 

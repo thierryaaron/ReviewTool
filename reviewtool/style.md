@@ -32,3 +32,9 @@ machine-written, when they recur:
 - Vocabulary that is ornate where a plain word would do.
 
 One instance of a pattern is rarely worth reporting. Report a pattern when it recurs, with examples.
+
+## What to leave alone
+
+- Prose that is clear and correct, even where you would have phrased it differently.
+- The authors' choices between acceptable variants of spelling, punctuation and citation style, provided they are consistent.
+- Long sentences that are easy to follow.

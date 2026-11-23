@@ -131,6 +131,14 @@ class PipelineTest(unittest.TestCase):
         self.assertEqual(len(resumed), 1)
         self.assertEqual(resumed[0]["messages"][1]["role"], "assistant")
 
+    def test_essential_detail_drops_minor_findings(self):
+        client = StubClient()
+        result = Reviewer(client, self.manuscript, Options(detail="essential", web=False, writing=False)).run()
+        # Every stub finding is minor, so none reach the report, but all stay in the saved findings.
+        self.assertEqual(len(result.findings), 3)
+        self.assertIn("Reviewer findings:\n[]", client.synthesis_instruction)
+        self.assertIn("Report major and moderate findings only", client.synthesis_instruction)
+
     def test_tools_and_flags(self):
         client = StubClient()
         Reviewer(client, self.manuscript, Options(web=False, code=False, fallback=False, writing=False, model="claude-haiku-5-5")).run()

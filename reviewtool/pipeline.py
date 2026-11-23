@@ -62,6 +62,7 @@ class Options:
     code: bool = True
     fallback: bool = True
     writing: bool = True
+    detail: str = "standard"
     style: str = ""
     notes: str = ""
 
@@ -294,6 +295,13 @@ class Reviewer:
         missing = sum(1 for f in findings if f["quote_found"] is False)
         _log(f"Collected {len(findings)} findings. {missing} quote passages were not found in the text.")
 
+        if opts.detail == "essential":
+            kept = [f for f in findings if f.get("severity") != "minor"]
+            _log(f"Dropped {len(findings) - len(kept)} minor findings before writing the report.")
+            findings_for_report = kept
+        else:
+            findings_for_report = findings
+
         _log("Writing the report...")
         notes = f"Notes from the authors: {opts.notes}\n\n" if opts.notes else ""
         plan_for_report = {**plan, "section_groups": groups}
@@ -303,7 +311,8 @@ class Reviewer:
                 notes=notes,
                 plan=json.dumps(plan_for_report, indent=1, ensure_ascii=False),
                 assessments=json.dumps(self.assessments, indent=1, ensure_ascii=False) if self.assessments else "none",
-                findings=json.dumps(findings, indent=1, ensure_ascii=False),
+                findings=json.dumps(findings_for_report, indent=1, ensure_ascii=False),
+                detail=prompts.DETAIL[opts.detail],
             ),
             max_tokens=64000,
         )

@@ -28,6 +28,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--groups", type=int, default=5, help="maximum number of section groups (default: 5)")
     parser.add_argument("--workers", type=int, default=3, help="reviewers running at once (default: 3)")
     parser.add_argument("--notes", default="", help='context for the reviewers, e.g. "target journal: Nature Climate Change"')
+    parser.add_argument("--detail", default="standard", choices=["essential", "standard", "exhaustive"],
+                        help="essential: major and moderate findings only. standard: those plus the ten most "
+                             "useful minor ones (default). exhaustive: everything that passes the materiality test")
     parser.add_argument("--style", type=Path, default=Path(__file__).with_name("style.md"),
                         help="style guide for the writing reviewers (default: reviewtool/style.md)")
     parser.add_argument("--no-writing", action="store_true", help="skip the structure and prose reviewers")
@@ -60,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
 
     options = Options(
         model=args.model, effort=args.effort, max_groups=args.groups, workers=args.workers,
-        web=not args.no_web, code=not args.no_code, fallback=not args.no_fallback, writing=not args.no_writing, style=style, notes=args.notes,
+        web=not args.no_web, code=not args.no_code, fallback=not args.no_fallback, writing=not args.no_writing, detail=args.detail, style=style, notes=args.notes,
     )
     # The SDK retries rate limits and server errors itself. A new API account has low
     # rate limits, so allow more retries than the default of two.
