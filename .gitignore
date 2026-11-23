@@ -1,0 +1,8 @@
+# Manuscripts and reviews stay out of the repository.
+manuscripts/
+reviews/
+*.pdf
+*.docx
+__pycache__/
+.venv/
+.env
